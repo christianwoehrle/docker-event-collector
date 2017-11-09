@@ -4,9 +4,15 @@ import (
 	"fmt"
 	"log"
 	"github.com/fsouza/go-dockerclient"
+	"regexp"
 )
 
 func main() {
+
+
+//pattern für services, containername ist vorne.number.id
+	servicePattern := regexp.MustCompile("\\.([0-9]+)\\.([0-9a-z]+)$")
+
 	endpoint := "unix:///var/run/docker.sock"
 
 	client, err := docker.NewClient(endpoint)
@@ -48,13 +54,14 @@ func main() {
 					fmt.Println("Container:", c.Name)
 				}
 			}
-			i, ok := containerDeaths[c.Name]
+			name := servicePattern.ReplaceAllString(c.Name, "")
+			i, ok := containerDeaths[name]
 			if ok {
-				containerDeaths[c.Name] = i + 1
+				containerDeaths[name] = i + 1
 			} else {
-				containerDeaths[c.Name] = 1
+				containerDeaths[name] = 1
 			}
-			fmt.Println("Container ", c.Name, ": Deaths:", containerDeaths[c.Name])
+			fmt.Println("Container ", name, ": Deaths:", containerDeaths[name])
 
 		case "stop", "kill":
 			//			log.Println("Stop event ...", msg)
