@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"github.com/fsouza/go-dockerclient"
 	"regexp"
 	"gopkg.in/alecthomas/kingpin.v2"
 	"time"
+	log "github.com/Sirupsen/logrus"
 )
 
 func main() {
@@ -14,13 +14,29 @@ func main() {
 
 
 	var (
-		//verbose = kingpin.Flag("verbose", "Verbose mode.").Short('v').Bool()
+		verbose = kingpin.Flag("verbose", "Verbose mode.").Short('v').Bool()
 		interval    = kingpin.Arg("interval", "Statistics every <interval> minutes.").Default("3").Int()
+        logLevel    = kingpin.Flag("logLevel", "LogLevel for Program").Default("DEBUG").Enum("DEBUG", "WARNING", "ERROR")
+
 	)
+
+
 	kingpin.Parse()
 	var containerDeaths map[string]int
 	containerDeaths = make(map[string]int)
     fmt.Println("", *verbose, *interval)
+
+	switch *logLevel {
+	case "DEBUG":
+		log.SetLevel(log.DebugLevel)
+
+	case "WARNING":
+		log.SetLevel(log.WarnLevel)
+	case "ERROR":
+		log.SetLevel(log.ErrorLevel)
+
+	}
+
 
     showStatitics(*interval, containerDeaths)
 	//pattern für services, containername ist vorne.number.id
