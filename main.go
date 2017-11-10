@@ -5,12 +5,25 @@ import (
 	"log"
 	"github.com/fsouza/go-dockerclient"
 	"regexp"
+	"gopkg.in/alecthomas/kingpin.v2"
+	"time"
 )
 
 func main() {
 
 
-//pattern für services, containername ist vorne.number.id
+
+	var (
+		//verbose = kingpin.Flag("verbose", "Verbose mode.").Short('v').Bool()
+		interval    = kingpin.Arg("interval", "Statistics every <interval> minutes.").Default("3").Int()
+	)
+	kingpin.Parse()
+	var containerDeaths map[string]int
+	containerDeaths = make(map[string]int)
+    fmt.Println("", *verbose, *interval)
+
+    showStatitics(*interval, containerDeaths)
+	//pattern für services, containername ist vorne.number.id
 	servicePattern := regexp.MustCompile("\\.([0-9]+)\\.([0-9a-z]+)$")
 
 	endpoint := "unix:///var/run/docker.sock"
@@ -24,14 +37,11 @@ func main() {
 	events := make(chan *docker.APIEvents)
 	client.AddEventListener(events)
 
-	fmt.Println("Duh")
-
 	quit := make(chan struct{})
 
-	var containerDeaths map[string]int
+
 	numContainerDeaths := 0
 
-	containerDeaths = make(map[string]int)
 	// Process Docker events
 	for msg := range events {
 		switch msg.Status {
@@ -40,9 +50,8 @@ func main() {
 
 		case "die":
 			numContainerDeaths++
-			log.Println("Die event #", numContainerDeaths, "...", msg)
+			//log.Println("Die event #", numContainerDeaths, "...", msg)
 			id := msg.ID
-			fmt.Println("ID:", id)
 			var c *docker.Container
 			var err error
 			if id != "" {
@@ -51,7 +60,7 @@ func main() {
 					fmt.Println(err)
 				} else
 				{
-					fmt.Println("Container:", c.Name)
+					fmt.Println("Container died, name:", c.Name, " Id:", id)
 				}
 			}
 			name := servicePattern.ReplaceAllString(c.Name, "")
@@ -68,7 +77,7 @@ func main() {
 		case "create":
 			//			log.Println("Create event ...", msg)
 		case "destroy":
-			log.Println("Destroy event ...", msg)
+			//log.Println("Destroy event ...", msg)
 		default:
 			//			log.Println("Default Event, was ist denn das:", msg.Status, ",", msg.ID, ";", msg.From, "duh", msg)
 
@@ -78,4 +87,27 @@ func main() {
 	close(quit)
 	log.Fatal("Docker event loop closed") // todo: reconnect?
 
+}
+
+
+func showStatitics(interval int, containerDeaths map[string]int) {
+
+	ticker := time.NewTicker(time.Duration(interval) * time.Minute)
+
+	go func() {
+		for {
+			select {
+			    case <- ticker.C:
+			    	fmt.Println("Stats:")
+			    	if containerDeaths != nil {
+						for i,j := range containerDeaths {
+							fmt.Println(i,j)
+						}
+						fmt.Println(containerDeaths)
+					}
+			    	fmt.Println("empty")
+
+			}
+		}
+	}()
 }
