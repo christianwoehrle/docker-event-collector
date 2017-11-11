@@ -7,29 +7,47 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 	"time"
 	log "github.com/Sirupsen/logrus"
+	"strings"
+	"sort"
+
+	"sync"
+
 )
+
+type container struct {
+	name   string
+	deaths int
+}
+
+func (c container) String() string {
+	return fmt.Sprintf("{Name:%s, Deaths:%d}", c.name, c.deaths)
+}
+
+var mutex = &sync.Mutex{}
+
+type containers []container
+
+func (a containers) Len() int           { return len(a) }
+func (a containers) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a containers) Less(i, j int) bool { return a[i].deaths < a[j].deaths }
 
 func main() {
 
-
-
 	var (
-		verbose = kingpin.Flag("verbose", "Verbose mode.").Short('v').Bool()
-		interval    = kingpin.Arg("interval", "Statistics every <interval> minutes.").Default("3").Int()
-        logLevel    = kingpin.Flag("logLevel", "LogLevel for Program").Default("DEBUG").Enum("DEBUG", "WARNING", "ERROR")
-
+		interval = kingpin.Arg("interval", "Statistics every <interval> minutes.").Default("3").Int()
+		logLevel = kingpin.Flag("logLevel", "LogLevel for Program").Default("INFO").Enum("DEBUG", "INFO", "WARNING", "ERROR")
 	)
-
-
 	kingpin.Parse()
-	var containerDeaths map[string]int
-	containerDeaths = make(map[string]int)
-    fmt.Println("", *verbose, *interval)
+
+	var containerDeaths map[string]container
+	containerDeaths = make(map[string]container)
+	fmt.Println(*interval, *logLevel)
 
 	switch *logLevel {
 	case "DEBUG":
 		log.SetLevel(log.DebugLevel)
-
+	case "INFO":
+		log.SetLevel(log.InfoLevel)
 	case "WARNING":
 		log.SetLevel(log.WarnLevel)
 	case "ERROR":
@@ -37,8 +55,7 @@ func main() {
 
 	}
 
-
-    showStatitics(*interval, containerDeaths)
+	showStatitics(*interval, containerDeaths)
 	//pattern für services, containername ist vorne.number.id
 	servicePattern := regexp.MustCompile("\\.([0-9]+)\\.([0-9a-z]+)$")
 
@@ -49,81 +66,88 @@ func main() {
 		panic(err)
 	}
 
-	log.Println("Start Event Listener für Docker Events...")
+	log.Info("Start Event Listener für Docker Events...")
 	events := make(chan *docker.APIEvents)
 	client.AddEventListener(events)
 
 	quit := make(chan struct{})
-
 
 	numContainerDeaths := 0
 
 	// Process Docker events
 	for msg := range events {
 		switch msg.Status {
-		case "start":
-			//log.Println("Start event ...", msg)
-
 		case "die":
 			numContainerDeaths++
 			//log.Println("Die event #", numContainerDeaths, "...", msg)
 			id := msg.ID
-			var c *docker.Container
+			var dc *docker.Container
 			var err error
 			if id != "" {
-				c, err = client.InspectContainer(id)
+				dc, err = client.InspectContainer(id)
 				if err != nil {
 					fmt.Println(err)
 				} else
 				{
-					fmt.Println("Container died, name:", c.Name, " Id:", id)
+					log.Debug("Container died, name:", dc.Name, " Id:", id)
 				}
 			}
-			name := servicePattern.ReplaceAllString(c.Name, "")
-			i, ok := containerDeaths[name]
+			cname := servicePattern.ReplaceAllString(dc.Name, "")
+			cname = strings.TrimPrefix(cname, "/")
+			mutex.Lock()
+			c, ok := containerDeaths[cname]
 			if ok {
-				containerDeaths[name] = i + 1
+				c.deaths=c.deaths+1
+				// TODO Why can´t i just increment
+				containerDeaths[cname] = c
 			} else {
-				containerDeaths[name] = 1
+				c = container{name: cname, deaths: 1}
+				containerDeaths[cname] = c
 			}
-			fmt.Println("Container ", name, ": Deaths:", containerDeaths[name])
+			mutex.Unlock()
 
 		case "stop", "kill":
-			//			log.Println("Stop event ...", msg)
+			log.Debug("Stop event ...", msg)
+		case "start":
+			log.Debug("Start event ...", msg)
 		case "create":
-			//			log.Println("Create event ...", msg)
+			log.Debug("Create event ...", msg)
 		case "destroy":
-			//log.Println("Destroy event ...", msg)
+			log.Debug("Destroy event ...", msg)
 		default:
-			//			log.Println("Default Event, was ist denn das:", msg.Status, ",", msg.ID, ";", msg.From, "duh", msg)
+			log.Debug("Default Event, network connect?:", msg.Status, ",", msg.ID, ";", msg.From, msg)
 
 		}
 
 	}
 	close(quit)
-	log.Fatal("Docker event loop closed") // todo: reconnect?
+	log.Info("Docker event loop closed") // todo: reconnect?
 
 }
 
-
-func showStatitics(interval int, containerDeaths map[string]int) {
+func showStatitics(interval int, containerDeaths map[string]container) {
 
 	ticker := time.NewTicker(time.Duration(interval) * time.Minute)
 
 	go func() {
+		log.Info("Start Statisctics")
 		for {
 			select {
-			    case <- ticker.C:
-			    	fmt.Println("Stats:")
-			    	if containerDeaths != nil {
-						for i,j := range containerDeaths {
-							fmt.Println(i,j)
-						}
-						fmt.Println(containerDeaths)
-					}
-			    	fmt.Println("empty")
-
+			case <-ticker.C:
+				var cs containers
+				mutex.Lock()
+				for i := range containerDeaths {
+					cs = append(cs, containerDeaths[i])
+				}
+				mutex.Unlock()
+				fmt.Println(cs)
+				sort.Sort(cs)
+				fmt.Println("Stats:")
+				for _, k := range cs {
+					fmt.Println(k.deaths, ";", k.name)
+				}
 			}
 		}
 	}()
+
 }
