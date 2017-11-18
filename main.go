@@ -9,9 +9,10 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"strings"
 	"sort"
-
+	"os/signal"
 	"sync"
 
+	"os"
 )
 
 type container struct {
@@ -31,18 +32,23 @@ func (a containers) Len() int           { return len(a) }
 func (a containers) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a containers) Less(i, j int) bool { return a[i].deaths < a[j].deaths }
 
+var containerDeaths map[string]container
+
 func main() {
 
 	var (
-		interval = kingpin.Arg("interval", "Statistics every <interval> minutes.").Default("3").Int()
+		interval = kingpin.Flag("interval", "Statistics every <interval> minutes.").Default("3").Int()
+		//reporttime = kingpin.Flag("reporttime", "Time when report should be printed [hh:mm]").String()
 		logLevel = kingpin.Flag("logLevel", "LogLevel for Program").Default("INFO").Enum("DEBUG", "INFO", "WARNING", "ERROR")
 	)
 	kingpin.Parse()
 
-	var containerDeaths map[string]container
 	containerDeaths = make(map[string]container)
 	fmt.Println(*interval, *logLevel)
 
+	//reporttimer := time.Now()
+
+	//fmt.Println(reporttimer, reporttime)
 	switch *logLevel {
 	case "DEBUG":
 		log.SetLevel(log.DebugLevel)
@@ -55,7 +61,30 @@ func main() {
 
 	}
 
-	showStatitics(*interval, containerDeaths)
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, os.Interrupt)
+	go func() {
+		fmt.Println("start interrupt listener")
+		for {
+			sig := <-signalChan
+			fmt.Println("\nReceived an interrupt, showstats... :\n", sig)
+			showStatistics()
+		}
+	}()
+	ticker := time.NewTicker(time.Duration(*interval) * time.Minute)
+	go func() {
+		log.Info("Start Statisctics")
+		for {
+			for {
+				select {
+				case <-ticker.C:
+					showStatistics()
+				}
+			}
+		}
+	}()
+
+	showStatistics()
 	//pattern für services, containername ist vorne.number.id
 	servicePattern := regexp.MustCompile("\\.([0-9]+)\\.([0-9a-z]+)$")
 
@@ -97,7 +126,7 @@ func main() {
 			mutex.Lock()
 			c, ok := containerDeaths[cname]
 			if ok {
-				c.deaths=c.deaths+1
+				c.deaths = c.deaths + 1
 				// TODO Why can´t i just increment
 				containerDeaths[cname] = c
 			} else {
@@ -125,29 +154,21 @@ func main() {
 
 }
 
-func showStatitics(interval int, containerDeaths map[string]container) {
+func showStatistics() {
 
-	ticker := time.NewTicker(time.Duration(interval) * time.Minute)
+	log.Info("Start Statisctics")
 
-	go func() {
-		log.Info("Start Statisctics")
-		for {
-			select {
-			case <-ticker.C:
-				var cs containers
-				mutex.Lock()
-				for i := range containerDeaths {
-					cs = append(cs, containerDeaths[i])
-				}
-				mutex.Unlock()
-				fmt.Println(cs)
-				sort.Sort(cs)
-				fmt.Println("Stats:")
-				for _, k := range cs {
-					fmt.Println(k.deaths, ";", k.name)
-				}
-			}
-		}
-	}()
+	var cs containers
+	mutex.Lock()
+	for i := range containerDeaths {
+		cs = append(cs, containerDeaths[i])
+	}
+	mutex.Unlock()
+	fmt.Println(cs)
+	sort.Sort(cs)
+	fmt.Println("Stats:")
+	for _, k := range cs {
+		fmt.Println(k.deaths, ";", k.name)
+	}
 
 }
