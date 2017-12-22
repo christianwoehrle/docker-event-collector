@@ -39,8 +39,8 @@ var containerDeaths map[string]container
 func main() {
 
 	var (
-		interval  = kingpin.Flag("interval", "Statistics every <interval> minutes.").Default("3").Int()
-		starttime = kingpin.Flag("starttime", "Time when report should be printed [hh:mm]").String()
+		interval  = kingpin.Flag("interval", "Statistics every <interval> minutes.").Default("10").Int()
+		starttime = kingpin.Flag("starttime", "Time when report should be printed [hh:mm|now]").Default("now").String()
 		logLevel  = kingpin.Flag("logLevel", "LogLevel for Program").Default("INFO").Enum("DEBUG", "INFO", "WARNING", "ERROR")
 	)
 	kingpin.Parse()
@@ -78,16 +78,14 @@ func main() {
 	log.Info("FirstAlert: ", firstAlert)
 	timer := time.NewTimer(time.Until(firstAlert))
 
-	log.Info("TimeUntil: ", time.Until(firstAlert))
-	log.Info("TimeSub: ", firstAlert.Sub(time.Now()))
+	log.Debug("TimeUntil: ", time.Until(firstAlert))
 
 	go func() {
 		<-timer.C
-		log.Info("Startzeitpunkt erreicht")
+		log.Debug("Startzeitpunkt erreicht")
 		showStatistics()
 		ticker := time.NewTicker(time.Duration(*interval) * time.Minute)
 		go func() {
-			log.Info("Start Statisctics")
 			for {
 				for {
 					select {
@@ -189,6 +187,12 @@ func showStatistics() {
 
 func getFirstAlertTime(starttime string) (alarmTime time.Time) {
 
+	if starttime == "now" {
+		log.Info("Start immediately")
+		alarmTime = time.Now()
+		return
+	}
+
 	hour, _ := strconv.Atoi(string([]rune(starttime)[0:2]))
 	//	fmt.Println(err)
 
@@ -198,19 +202,13 @@ func getFirstAlertTime(starttime string) (alarmTime time.Time) {
 	//	fmt.Println(string(hour))
 	//fmt.Println(string(minute))
 	now := time.Now()
-	log.Info("Time Now:", now)
-
 	alarmTime = time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, now.Location())
-	//fmt.Println(now)
-	//fmt.Println(alarmTime)
-	log.Info("AlarmTime: ", alarmTime)
+	//log.Info("AlarmTime: ", alarmTime)
 	if alarmTime.Before(now) {
 		log.Info("alarmTime before now")
 		alarmTime = alarmTime.Add(24 * time.Hour)
-		//fmt.Println(now)
 
 	}
-	log.Info("AlarmTime: ", alarmTime)
 	return
 
 }
