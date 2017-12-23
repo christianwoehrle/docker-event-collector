@@ -10,6 +10,5 @@ RUN cd /src && go get -v -d && go build -ldflags '-w -s' -a -installsuffix cgo -
 
 # final stage
 FROM scratch
-WORKDIR /app
 COPY --from=build-env /src/goapp /app/
-ENTRYPOINT ./goapp
+ENTRYPOINT /app/goapp
