@@ -34,7 +34,8 @@ func (a containers) Len() int           { return len(a) }
 func (a containers) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a containers) Less(i, j int) bool { return a[i].deaths < a[j].deaths }
 
-var containerDeaths map[string]container
+var containerDeathsByContainerName map[string]container
+var containerDeathsByImageName map[string]container
 
 func main() {
 
@@ -45,7 +46,8 @@ func main() {
 	)
 	kingpin.Parse()
 
-	containerDeaths = make(map[string]container)
+	containerDeathsByContainerName = make(map[string]container)
+	containerDeathsByImageName = make(map[string]container)
 	fmt.Println(*interval, *logLevel)
 
 	//reporttimer := time.Now()
@@ -121,7 +123,7 @@ func main() {
 		switch msg.Status {
 		case "die":
 			numContainerDeaths++
-			//log.Println("Die event #", numContainerDeaths, "...", msg)
+			log.Debug("Die event #", numContainerDeaths, "...", msg)
 			id := msg.ID
 			var dc *docker.Container
 			var err error
@@ -130,21 +132,32 @@ func main() {
 				if err != nil {
 					fmt.Println(err)
 				} else {
-					log.Debug("Container died, name:", dc.Name, " Id:", id)
+					log.Debug("Container died, name:", dc.Name, " Id:", id, " Image: ", dc.Config.Image)
 				}
 			}
 			cname := servicePattern.ReplaceAllString(dc.Name, "")
 			cname = strings.TrimPrefix(cname, "/")
 			mutex.Lock()
-			c, ok := containerDeaths[cname]
+			c, ok := containerDeathsByContainerName[cname]
 			if ok {
 				c.deaths = c.deaths + 1
 				// TODO Why can´t i just increment
-				containerDeaths[cname] = c
+				containerDeathsByContainerName[cname] = c
 			} else {
 				c = container{name: cname, deaths: 1}
-				containerDeaths[cname] = c
+				containerDeathsByContainerName[cname] = c
 			}
+			imageName := string(dc.Config.Image)
+			c, ok = containerDeathsByImageName[imageName]
+			if ok {
+				c.deaths = c.deaths + 1
+				// TODO Why can´t i just increment
+				containerDeathsByImageName[imageName] = c
+			} else {
+				c = container{name: imageName, deaths: 1}
+				containerDeathsByImageName[imageName] = c
+			}
+
 			mutex.Unlock()
 
 		case "stop", "kill":
@@ -172,17 +185,27 @@ func showStatistics() {
 
 	var cs containers
 	mutex.Lock()
-	for i := range containerDeaths {
-		cs = append(cs, containerDeaths[i])
+	for i := range containerDeathsByContainerName {
+		cs = append(cs, containerDeathsByContainerName[i])
 	}
 	mutex.Unlock()
-	fmt.Println(cs)
 	sort.Sort(cs)
 	fmt.Println("Stats:")
 	for _, k := range cs {
 		fmt.Println(k.deaths, ";", k.name)
 	}
 
+	cs = nil
+	mutex.Lock()
+	for i := range containerDeathsByImageName {
+		cs = append(cs, containerDeathsByImageName[i])
+	}
+	mutex.Unlock()
+	sort.Sort(cs)
+	fmt.Println("Stats:")
+	for _, k := range cs {
+		fmt.Println(k.deaths, ";", k.name)
+	}
 }
 
 func getFirstAlertTime(starttime string) (alarmTime time.Time) {
