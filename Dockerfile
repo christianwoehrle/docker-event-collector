@@ -1,10 +1,15 @@
 # build stage
 FROM golang:1.9 AS build-env
 ADD . /src
-RUN cd /src && go get -v -d && go build -o goapp
+#disable crosscompiling
+ENV CGO_ENABLED=0
+
+#compile linux only
+ENV GOOS=linux
+RUN cd /src && go get -v -d && go build -ldflags '-w -s' -a -installsuffix cgo -o goapp
 
 # final stage
-FROM alpine
+FROM scratch
 WORKDIR /app
 COPY --from=build-env /src/goapp /app/
 ENTRYPOINT ./goapp
