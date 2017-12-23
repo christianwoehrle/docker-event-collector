@@ -1,5 +1,5 @@
 # build stage
-FROM golang:alpine AS build-env
+FROM golang:1.9 AS build-env
 ADD . /src
 RUN cd /src && go get -v -d && go build -o goapp
 
