@@ -37,6 +37,7 @@ func (a containers) Less(i, j int) bool { return a[i].deaths < a[j].deaths }
 var containerDeathsByContainerName map[string]container
 var containerDeathsByImageName map[string]container
 
+//
 func main() {
 
 	var (
@@ -179,6 +180,7 @@ func main() {
 
 }
 
+// Print the statistics about died containers to stdout
 func showStatistics() {
 
 	log.Info("Start Statisctics")
@@ -208,6 +210,8 @@ func showStatistics() {
 	}
 }
 
+// compute the time when statistics should be printed
+// if [hh:mm] today has already passed, the the time to tomorrow:[hh:mm]
 func getFirstAlertTime(starttime string) (alarmTime time.Time) {
 
 	if starttime == "now" {
