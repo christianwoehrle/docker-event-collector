@@ -11,4 +11,7 @@ RUN cd /src && go get -v -d && go build -ldflags '-w -s' -a -installsuffix cgo -
 # final stage
 FROM scratch
 COPY --from=build-env /src/goapp /app/
+
+VOLUME /var/run/docker.sock
+
 ENTRYPOINT ["/app/goapp"]
