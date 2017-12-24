@@ -18,3 +18,8 @@ i.e.
 --interval 60 --starttime [15:00|now]
 
 Default is starttime now and interval 10 Minutes.
+
+To run the docker-container, you have to mount in the docker-socket so that the container can collect the events:
+
+docker run -v /var/run/docker.sock:/var/run/docker.sock christianwoehrle/docker-event-collector:latest --interval 1
+
