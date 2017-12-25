@@ -1,10 +1,13 @@
+// Package detects and reports a summary about dying containers
 package main
 
 import (
 	"fmt"
+	"os"
 	"os/signal"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -12,9 +15,6 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/fsouza/go-dockerclient"
 	"gopkg.in/alecthomas/kingpin.v2"
-
-	"os"
-	"strconv"
 )
 
 type container struct {
