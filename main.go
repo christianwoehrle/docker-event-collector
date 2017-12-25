@@ -17,27 +17,36 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
+// container is a struct with the name and number of deaths of that container
+// the name can be the actual name (useful when docker run --name <> has been used or the image name
 type container struct {
 	name   string
 	deaths int
 }
 
+// Stringer
 func (c container) String() string {
 	return fmt.Sprintf("{Name:%s, Deaths:%d}", c.name, c.deaths)
 }
 
 var mutex = &sync.Mutex{}
 
+// containers is a type used for storing and sorting the containers
 type containers []container
 
 func (a containers) Len() int           { return len(a) }
 func (a containers) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a containers) Less(i, j int) bool { return a[i].deaths < a[j].deaths }
 
-var containerDeathsByContainerName map[string]container
-var containerDeathsByImageName map[string]container
+var containerDeathsByContainerName map[string]*container
+var containerDeathsByImageName map[string]*container
 
+// main starts the even collection loop and prints the statistics in a given intervall
+// starts a signal handler that catches ctrl-c and prints the statistics
 //
+// Parameters
+//    --interval <minutes>     interval in which the statistics is printed, default: 10
+//    -- starttime [hh:mm]|now     time when the statistics is printed the first time, default: now
 func main() {
 
 	var (
@@ -47,8 +56,8 @@ func main() {
 	)
 	kingpin.Parse()
 
-	containerDeathsByContainerName = make(map[string]container)
-	containerDeathsByImageName = make(map[string]container)
+	containerDeathsByContainerName = make(map[string]*container)
+	containerDeathsByImageName = make(map[string]*container)
 	fmt.Println(*interval, *logLevel)
 
 	//reporttimer := time.Now()
@@ -141,21 +150,19 @@ func main() {
 			mutex.Lock()
 			c, ok := containerDeathsByContainerName[cname]
 			if ok {
-				c.deaths = c.deaths + 1
-				// TODO Why can´t i just increment
-				containerDeathsByContainerName[cname] = c
+				c.deaths += 1
+				//containerDeathsByContainerName[cname] = c
 			} else {
-				c = container{name: cname, deaths: 1}
+				c = &container{name: cname, deaths: 1}
 				containerDeathsByContainerName[cname] = c
 			}
 			imageName := string(dc.Config.Image)
 			c, ok = containerDeathsByImageName[imageName]
 			if ok {
-				c.deaths = c.deaths + 1
-				// TODO Why can´t i just increment
+				c.deaths += 1
 				containerDeathsByImageName[imageName] = c
 			} else {
-				c = container{name: imageName, deaths: 1}
+				c = &container{name: imageName, deaths: 1}
 				containerDeathsByImageName[imageName] = c
 			}
 
@@ -188,7 +195,7 @@ func showStatistics() {
 	var cs containers
 	mutex.Lock()
 	for i := range containerDeathsByContainerName {
-		cs = append(cs, containerDeathsByContainerName[i])
+		cs = append(cs, *containerDeathsByContainerName[i])
 	}
 	mutex.Unlock()
 	sort.Sort(cs)
@@ -200,7 +207,7 @@ func showStatistics() {
 	cs = nil
 	mutex.Lock()
 	for i := range containerDeathsByImageName {
-		cs = append(cs, containerDeathsByImageName[i])
+		cs = append(cs, *containerDeathsByImageName[i])
 	}
 	mutex.Unlock()
 	sort.Sort(cs)
