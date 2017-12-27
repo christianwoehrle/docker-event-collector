@@ -115,8 +115,14 @@ func main() {
 
 	endpoint := "unix:///var/run/docker.sock"
 
+	_, err := os.Stat("endpoint")
+	if err != nil {
+		log.Error("no docker socket available, shutting down ...")
+		return
+	}
 	client, err := docker.NewClient(endpoint)
 	if err != nil {
+		log.Error("cannot connect to docker, shutting down ...")
 		panic(err)
 	}
 
@@ -183,7 +189,7 @@ func main() {
 
 	}
 	close(quit)
-	log.Info("Docker event loop closed") // todo: reconnect?
+	log.Info("Docker event loop closed")
 
 }
 
