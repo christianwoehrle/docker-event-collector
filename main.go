@@ -113,14 +113,14 @@ func main() {
 	//pattern für services, containername ist vorne.number.id
 	servicePattern := regexp.MustCompile("\\.([0-9]+)\\.([0-9a-z]+)$")
 
-	endpoint := "unix:///var/run/docker.sock"
+	endpoint := "/var/run/docker.sock"
 
-	_, err := os.Stat("endpoint")
+	_, err := os.Stat(endpoint)
 	if err != nil {
 		log.Error("no docker socket available, shutting down ...")
 		return
 	}
-	client, err := docker.NewClient(endpoint)
+	client, err := docker.NewClient("unix://" + endpoint)
 	if err != nil {
 		log.Error("cannot connect to docker, shutting down ...")
 		panic(err)
