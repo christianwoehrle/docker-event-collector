@@ -146,6 +146,7 @@ func main() {
 		select {
 
 		case msg := <-events:
+			log.Debug(msg)
 			switch msg.Status {
 			case "die":
 				numContainerDeaths++
