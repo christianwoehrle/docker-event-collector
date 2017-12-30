@@ -52,7 +52,7 @@ func main() {
 	var (
 		interval  = kingpin.Flag("interval", "Statistics every <interval> minutes.").Default("10").Int()
 		starttime = kingpin.Flag("starttime", "Time when report should be printed [hh:mm|now]").Default("now").String()
-		logLevel  = kingpin.Flag("logLevel", "LogLevel for Program").Default("INFO").Enum("DEBUG", "INFO", "WARNING", "ERROR")
+		logLevel  = kingpin.Flag("logLevel", "LogLevel for Program (DEBUG|INFO|WARNING|ERROR)").Default("INFO").Enum("DEBUG", "INFO", "WARNING", "ERROR")
 	)
 	kingpin.Parse()
 
@@ -138,6 +138,7 @@ func main() {
 
 	numContainerDeaths := 0
 
+	log.Debug("for msg range events")
 	// Process Docker events
 	for msg := range events {
 		switch msg.Status {
