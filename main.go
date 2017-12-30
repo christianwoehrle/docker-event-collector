@@ -134,66 +134,74 @@ func main() {
 		log.Error("cannot add event listener, shutting down ...")
 		panic(err)
 	}
-	quit := make(chan struct{})
+	log.Debug("Event Listener started")
+
+	done := make(chan struct{})
 
 	numContainerDeaths := 0
 
 	log.Debug("for msg range events")
 	// Process Docker events
-	for msg := range events {
-		switch msg.Status {
-		case "die":
-			numContainerDeaths++
-			log.Debug("Die event #", numContainerDeaths, "...", msg)
-			id := msg.ID
-			var dc *docker.Container
-			var err error
-			if id != "" {
-				dc, err = client.InspectContainer(id)
-				if err != nil {
-					fmt.Println(err)
-				} else {
-					log.Debug("Container died, name:", dc.Name, " Id:", id, " Image: ", dc.Config.Image)
+	for {
+		select {
+
+		case msg := <-events:
+			switch msg.Status {
+			case "die":
+				numContainerDeaths++
+				log.Debug("Die event #", numContainerDeaths, "...", msg)
+				id := msg.ID
+				var dc *docker.Container
+				var err error
+				if id != "" {
+					dc, err = client.InspectContainer(id)
+					if err != nil {
+						fmt.Println(err)
+					} else {
+						log.Debug("Container died, name:", dc.Name, " Id:", id, " Image: ", dc.Config.Image)
+					}
 				}
-			}
-			cname := servicePattern.ReplaceAllString(dc.Name, "")
-			cname = strings.TrimPrefix(cname, "/")
-			mutex.Lock()
-			c, ok := containerDeathsByContainerName[cname]
-			if ok {
-				c.deaths += 1
-				//containerDeathsByContainerName[cname] = c
-			} else {
-				c = &container{name: cname, deaths: 1}
-				containerDeathsByContainerName[cname] = c
-			}
-			imageName := string(dc.Config.Image)
-			c, ok = containerDeathsByImageName[imageName]
-			if ok {
-				c.deaths += 1
-				containerDeathsByImageName[imageName] = c
-			} else {
-				c = &container{name: imageName, deaths: 1}
-				containerDeathsByImageName[imageName] = c
-			}
+				cname := servicePattern.ReplaceAllString(dc.Name, "")
+				cname = strings.TrimPrefix(cname, "/")
+				mutex.Lock()
+				c, ok := containerDeathsByContainerName[cname]
+				if ok {
+					c.deaths += 1
+					//containerDeathsByContainerName[cname] = c
+				} else {
+					c = &container{name: cname, deaths: 1}
+					containerDeathsByContainerName[cname] = c
+				}
+				imageName := string(dc.Config.Image)
+				c, ok = containerDeathsByImageName[imageName]
+				if ok {
+					c.deaths += 1
+					containerDeathsByImageName[imageName] = c
+				} else {
+					c = &container{name: imageName, deaths: 1}
+					containerDeathsByImageName[imageName] = c
+				}
 
-			mutex.Unlock()
+				mutex.Unlock()
 
-		case "stop", "kill":
-			log.Debug("Stop event ...", msg)
-		case "start":
-			log.Debug("Start event ...", msg)
-		case "create":
-			log.Debug("Create event ...", msg)
-		case "destroy":
-			log.Debug("Destroy event ...", msg)
-		default:
-			log.Debug("Default Event, network connect?:", msg.Status, ",", msg.ID, ";", msg.From, msg)
+			case "stop", "kill":
+				log.Debug("Stop event ...", msg)
+			case "start":
+				log.Debug("Start event ...", msg)
+			case "create":
+				log.Debug("Create event ...", msg)
+			case "destroy":
+				log.Debug("Destroy event ...", msg)
+			default:
+				log.Debug("Default Event, network connect?:", msg.Status, ",", msg.ID, ";", msg.From, msg)
+
+			}
+		case <-done:
+			break
 
 		}
-
 	}
-	close(quit)
+	close(done)
 	log.Info("Docker event loop closed")
 
 }
