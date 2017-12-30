@@ -128,8 +128,12 @@ func main() {
 
 	log.Info("Start Event Listener für Docker Events...")
 	events := make(chan *docker.APIEvents)
-	client.AddEventListener(events)
+	err = client.AddEventListener(events)
 
+	if err != nil {
+		log.Error("cannot add event listener, shutting down ...")
+		panic(err)
+	}
 	quit := make(chan struct{})
 
 	numContainerDeaths := 0
