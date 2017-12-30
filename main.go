@@ -144,9 +144,11 @@ func main() {
 	// Process Docker events
 	for {
 		select {
-
 		case msg := <-events:
 			log.Debug(msg)
+			if msg == nil {
+				continue
+			}
 			switch msg.Status {
 			case "die":
 				numContainerDeaths++
