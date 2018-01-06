@@ -85,6 +85,7 @@ func main() {
 	timer := time.NewTimer(time.Until(firstAlert))
 
 	log.Debug("TimeUntil: ", time.Until(firstAlert))
+	done := make(chan interface{})
 
 	go func() {
 		<-timer.C
@@ -105,7 +106,6 @@ func main() {
 	}()
 
 	log.Debug("for msg range events")
-	done := make(chan interface{})
 
 	processDockerEvents(done, containerDeathsByContainerName, containerDeathsByImageName)
 	close(done)
@@ -250,13 +250,8 @@ func getFirstAlertTime(starttime string) (alarmTime time.Time) {
 	}
 
 	hour, _ := strconv.Atoi(string([]rune(starttime)[0:2]))
-	//	fmt.Println(err)
-
 	minute, _ := strconv.Atoi(string([]rune(starttime)[3:]))
-	//	fmt.Println(err)
 
-	//	fmt.Println(string(hour))
-	//fmt.Println(string(minute))
 	now := time.Now()
 	alarmTime = time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, now.Location())
 	//log.Info("AlarmTime: ", alarmTime)
