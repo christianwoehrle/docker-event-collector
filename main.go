@@ -38,9 +38,6 @@ func (a containers) Len() int           { return len(a) }
 func (a containers) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a containers) Less(i, j int) bool { return a[i].deaths < a[j].deaths }
 
-var containerDeathsByContainerName map[string]*container
-var containerDeathsByImageName map[string]*container
-
 // main starts the even collection loop and prints the statistics in a given intervall
 // starts a signal handler that catches ctrl-c and prints the statistics
 //
@@ -56,13 +53,10 @@ func main() {
 	)
 	kingpin.Parse()
 
-	containerDeathsByContainerName = make(map[string]*container)
-	containerDeathsByImageName = make(map[string]*container)
+	containerDeathsByContainerName := make(map[string]*container)
+	containerDeathsByImageName := make(map[string]*container)
 	fmt.Println(*interval, *logLevel)
 
-	//reporttimer := time.Now()
-
-	//fmt.Println(reporttimer, starttime)
 	switch *logLevel {
 	case "DEBUG":
 		log.SetLevel(log.DebugLevel)
@@ -82,7 +76,7 @@ func main() {
 		for {
 			sig := <-signalChan
 			fmt.Println("\nReceived an interrupt, showstats... :\n", sig)
-			showStatistics()
+			showStatistics(containerDeathsByContainerName, containerDeathsByImageName)
 		}
 	}()
 
@@ -95,14 +89,14 @@ func main() {
 	go func() {
 		<-timer.C
 		log.Debug("Startzeitpunkt erreicht")
-		showStatistics()
+		showStatistics(containerDeathsByContainerName, containerDeathsByImageName)
 		ticker := time.NewTicker(time.Duration(*interval) * time.Minute)
 		go func() {
 			for {
 				for {
 					select {
 					case <-ticker.C:
-						showStatistics()
+						showStatistics(containerDeathsByContainerName, containerDeathsByImageName)
 					}
 				}
 			}
@@ -110,9 +104,16 @@ func main() {
 
 	}()
 
-	//pattern für services, containername ist vorne.number.id
-	servicePattern := regexp.MustCompile("\\.([0-9]+)\\.([0-9a-z]+)$")
+	log.Debug("for msg range events")
+	done := make(chan interface{})
 
+	processDockerEvents(done, containerDeathsByContainerName, containerDeathsByImageName)
+	close(done)
+	log.Info("Docker event loop closed")
+
+}
+
+func processDockerEvents(done <-chan interface{}, containerDeathsByContainerName, containerDeathsByImageName map[string]*container) {
 	endpoint := "/var/run/docker.sock"
 
 	_, err := os.Stat(endpoint)
@@ -126,6 +127,9 @@ func main() {
 		panic(err)
 	}
 
+	//pattern für services, containername ist vorne.number.id
+	servicePattern := regexp.MustCompile("\\.([0-9]+)\\.([0-9a-z]+)$")
+
 	log.Info("Start Event Listener für Docker Events...")
 	events := make(chan *docker.APIEvents)
 	err = client.AddEventListener(events)
@@ -136,16 +140,15 @@ func main() {
 	}
 	log.Debug("Event Listener started")
 
-	done := make(chan struct{})
-
 	numContainerDeaths := 0
-
-	log.Debug("for msg range events")
 	// Process Docker events
 	for {
 		select {
-		case msg := <-events:
-			log.Debug(msg)
+		case msg, more := <-events:
+			log.Debug("Message", msg, "More", more)
+			if !more {
+				log.Error("channel doesn´t return values anymore")
+			}
 			if msg == nil {
 				continue
 			}
@@ -204,13 +207,10 @@ func main() {
 
 		}
 	}
-	close(done)
-	log.Info("Docker event loop closed")
-
 }
 
 // Print the statistics about died containers to stdout
-func showStatistics() {
+func showStatistics(containerDeathsByContainerName map[string]*container, containerDeathsByImageName map[string]*container) {
 
 	log.Info("Start Statisctics")
 
