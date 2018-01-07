@@ -251,7 +251,7 @@ func getFirstAlertTime(starttime string) (alarmTime time.Time) {
 
 	hour, _ := strconv.Atoi(string([]rune(starttime)[0:2]))
 	minute, _ := strconv.Atoi(string([]rune(starttime)[3:]))
-
+	fmt.Println(hour, " --> ", minute)
 	now := time.Now()
 	alarmTime = time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, now.Location())
 	//log.Info("AlarmTime: ", alarmTime)
