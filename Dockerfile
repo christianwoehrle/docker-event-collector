@@ -1,5 +1,5 @@
 # build stage
-FROM golang:1.9 AS build-env
+FROM golang:1.10beta1 AS build-env
 ADD . /src
 #disable crosscompiling
 ENV CGO_ENABLED=0
